@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Mystery Box — Сигнал_Sale</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+<style>
+/* ======== RESET & BASE (Dark Telegram) ======== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#1c1c1e;--card:#2c2c2e;--chip:#3a3a3c;--chip-active:#0a84ff;
+  --text:#fff;--text2:#aaaab0;--accent:#0a84ff;--danger:#ff453a;--green:#30d158;
+  --gold:#ffd60a;
+  --safe-top:env(safe-area-inset-top,0px);--safe-bot:env(safe-area-inset-bottom,0px);
+}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  background:var(--bg);color:var(--text);overflow-x:hidden;-webkit-tap-highlight-color:transparent}
+body{padding-top:var(--safe-top);padding-bottom:var(--safe-bot);display:flex;flex-direction:column;min-height:100%}
+
+/* ======== SCREENS ======== */
+.screen{display:none;flex-direction:column;flex:1;width:100%;max-width:480px;margin:0 auto}
+.screen.active{display:flex}
+
+.header{text-align:center;padding:18px 16px 8px}
+.header h1{font-size:22px;font-weight:700;margin-bottom:2px}
+.header p{font-size:13px;color:var(--text2)}
+
+/* chips */
+.chips{display:flex;gap:8px;padding:8px 16px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;padding:6px 14px;border-radius:16px;background:var(--chip);color:var(--text);font-size:13px;
+  border:none;cursor:pointer;transition:background .2s,color .2s;white-space:nowrap}
+.chip.active{background:var(--chip-active);color:#fff}
+
+/* box area */
+.box-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 16px;gap:14px}
+.box-emoji{font-size:96px;cursor:pointer;animation:floatBox 3s ease-in-out infinite;user-select:none;
+  filter:drop-shadow(0 8px 24px rgba(10,132,255,.35));transition:transform .15s}
+.box-emoji:active{transform:scale(.9)}
+.box-emoji.disabled{pointer-events:none;opacity:.5;animation:none}
+@keyframes floatBox{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+@keyframes shake{0%,100%{transform:rotate(0)}15%{transform:rotate(-12deg)}30%{transform:rotate(10deg)}45%{transform:rotate(-8deg)}60%{transform:rotate(6deg)}75%{transform:rotate(-3deg)}90%{transform:rotate(2deg)}}
+.box-emoji.shake{animation:shake .6s ease-in-out}
+.hint{font-size:14px;color:var(--text2);text-align:center;line-height:1.5}
+.error-hint{font-size:13px;color:var(--danger);text-align:center;margin-top:6px;display:none}
+.attempts-info{font-size:13px;color:var(--text2);text-align:center;margin-top:4px;line-height:1.4}
+.attempts-info .free-label{color:var(--green);font-weight:600}
+.attempts-info .bonus-label{color:var(--gold);font-weight:600}
+
+/* loading state on main screen */
+.feed-status{text-align:center;padding:8px 16px;font-size:13px;color:var(--text2)}
+.feed-status.error{color:var(--danger)}
+.feed-status .retry-btn{display:inline-block;margin-top:8px;padding:8px 20px;border-radius:10px;background:var(--accent);
+  color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer}
+.feed-status .retry-btn:active{opacity:.7}
+
+/* loader overlay */
+.loader-overlay{position:fixed;inset:0;background:rgba(28,28,30,.85);display:none;align-items:center;justify-content:center;z-index:200;flex-direction:column;gap:14px}
+.loader-overlay.active{display:flex}
+.spinner{width:48px;height:48px;border:4px solid var(--chip);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+.loader-text{font-size:13px;color:var(--text2);text-align:center}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ======== SCREEN 2 — Result ======== */
+.result-card{margin:16px;border-radius:16px;background:var(--card);overflow:hidden;display:flex;flex-direction:column}
+.result-img-wrap{width:100%;aspect-ratio:4/3;background:var(--chip);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.result-img-wrap img{width:100%;height:100%;object-fit:contain}
+.result-img-wrap .no-img{font-size:14px;color:var(--text2)}
+.result-body{padding:16px;display:flex;flex-direction:column;gap:8px}
+.result-title{font-size:17px;font-weight:600;line-height:1.3}
+.result-prices{display:flex;align-items:baseline;gap:8px}
+.price-new{font-size:22px;font-weight:700;color:var(--green)}
+.price-old{font-size:15px;color:var(--text2);text-decoration:line-through}
+.result-meta{font-size:12px;color:var(--text2);display:flex;flex-direction:column;gap:2px}
+.result-erid{font-size:11px;color:var(--text2);opacity:.7}
+.result-ad-label{font-size:11px;color:var(--danger);font-weight:600}
+.result-timer{font-size:13px;color:var(--accent);text-align:center;padding:4px 0}
+
+.btn-row{display:flex;gap:10px;padding:0 16px 20px}
+.btn{flex:1;padding:14px 0;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;transition:opacity .2s}
+.btn-buy{background:var(--accent);color:#fff}
+.btn-again{background:var(--chip);color:var(--text)}
+.btn:active{opacity:.7}
+
+/* ======== SCREEN 3 — Limit (with ad-bonus option) ======== */
+.limit-msg{text-align:center;padding:32px 24px;color:var(--text2);font-size:15px;line-height:1.6}
+.limit-msg .lock-icon{font-size:48px;display:block;margin-bottom:12px}
+.limit-msg .tomorrow{margin-top:16px;font-size:13px;opacity:.7}
+
+.bonus-section{text-align:center;padding:0 24px 24px}
+.bonus-divider{display:flex;align-items:center;gap:12px;margin:0 0 16px;color:var(--text2);font-size:12px}
+.bonus-divider::before,.bonus-divider::after{content:'';flex:1;height:1px;background:var(--chip)}
+.btn-watch-ad{display:inline-flex;align-items:center;gap:8px;padding:14px 28px;border:none;border-radius:12px;
+  background:linear-gradient(135deg,#ffd60a,#ff9f0a);color:#000;font-size:15px;font-weight:700;cursor:pointer;
+  transition:opacity .2s,transform .15s;box-shadow:0 4px 16px rgba(255,214,10,.3)}
+.btn-watch-ad:active{opacity:.8;transform:scale(.96)}
+.btn-watch-ad.disabled{opacity:.4;pointer-events:none}
+.btn-watch-ad .ad-icon{font-size:20px}
+.bonus-hint{font-size:12px;color:var(--text2);margin-top:10px;line-height:1.4}
+.btn-back-main{display:inline-block;margin-top:12px;padding:10px 24px;border:none;border-radius:10px;
+  background:var(--chip);color:var(--text);font-size:14px;font-weight:500;cursor:pointer}
+.btn-back-main:active{opacity:.7}
+
+/* debug bar */
+.debug-bar{position:fixed;bottom:0;left:0;right:0;background:#000;color:#0f0;font-size:11px;padding:8px 12px;
+  z-index:999;max-height:30vh;overflow-y:auto;display:none;font-family:monospace;word-break:break-all}
+.debug-bar.active{display:block}
+.debug-bar button{background:var(--danger);color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;margin-right:6px;cursor:pointer}
+</style>
+</head>
+<body>
+
+<!-- ===== SCREEN 1: Main ===== -->
+<div id="screenMain" class="screen active">
+  <div class="header">
+    <h1>🎲 Mystery Box</h1>
+    <p>Сигнал_Sale — скидки наугад</p>
+  </div>
+  <div id="chipsWrap" class="chips"></div>
+  <div class="box-area">
+    <div id="boxEmoji" class="box-emoji" role="button" aria-label="Открыть коробку">🎁</div>
+    <div id="hintText" class="hint">Нажми на коробку — узнай свою скидку!</div>
+    <div id="feedStatus" class="feed-status"></div>
+    <div id="errorHint" class="error-hint"></div>
+    <div id="attemptsInfo" class="attempts-info"></div>
+  </div>
+</div>
+
+<!-- ===== SCREEN 2: Result ===== -->
+<div id="screenResult" class="screen">
+  <div class="result-card">
+    <div class="result-img-wrap" id="resultImgWrap"></div>
+    <div class="result-body">
+      <div class="result-ad-label">Партнёрская ссылка / Реклама</div>
+      <div class="result-title" id="resultTitle"></div>
+      <div class="result-prices" id="resultPrices"></div>
+      <div class="result-meta" id="resultMeta"></div>
+      <div class="result-erid" id="resultErid"></div>
+      <div class="result-timer" id="resultTimer"></div>
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-buy" id="btnBuy">Купить →</button>
+    <button class="btn btn-again" id="btnAgain">Ещё раз</button>
+  </div>
+</div>
+
+<!-- ===== SCREEN 3: Limit (with rewarded ad bonus) ===== -->
+<div id="screenLimit" class="screen">
+  <div class="box-area">
+    <div class="limit-msg">
+      <span class="lock-icon">🎁</span>
+      Ты использовал 2 бесплатные попытки сегодня!
+      <div class="tomorrow">Бесплатные попытки обновятся завтра</div>
+    </div>
+    <div class="bonus-section">
+      <div class="bonus-divider">или</div>
+      <button class="btn-watch-ad" id="btnWatchAd">
+        <span class="ad-icon">🎬</span>
+        Смотреть рекламу → +1 попытка
+      </button>
+      <div class="bonus-hint">Посмотри короткое видео и получи дополнительную попытку</div>
+      <div id="bonusUsedHint" class="bonus-hint" style="display:none;color:var(--gold)">
+        ✅ Бонусная попытка уже использована сегодня
+      </div>
+      <button class="btn-back-main" id="btnBackMain">← Назад</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Loader ===== -->
+<div id="loader" class="loader-overlay">
+  <div class="spinner"></div>
+  <div class="loader-text" id="loaderText"></div>
+</div>
+
+<!-- ===== Debug bar ===== -->
+<div id="debugBar" class="debug-bar"></div>
+
+<script>
+/* =============================================================
+   Mystery Box — Telegram Mini App
+   Сигнал_Sale  |  v3.0
+
+   v3: Rewarded ad model для прохождения модерации AdsGram
+   — 2 бесплатные попытки БЕЗ рекламы
+   — 3-я бонусная попытка ЗА ПРОСМОТР рекламы (rewarded)
+   — Реклама = награда (доп. попытка), а не блокер
+   ============================================================= */
+
+/* ---------- ГДЕ МЕНЯТЬ (1/3): AdsGram Block ID ---------- */
+const ADSGRAM_BLOCK_ID = '22741'; // <-- ВСТАВЬ СВОЙ BLOCK ID
+
+/* ---------- ГДЕ МЕНЯТЬ (2/3): URL Google Apps Script ---------- */
+const OFFERS_FEED_URL = 'https://script.google.com/macros/s/AKfycbyAdaMfGl7EtR-FtcPYjsOy_5R8kV9ixFo2AtB9EhTWH7i6JIA5NPd-EKIXuRFDC8zn/exec'; // <-- ВСТАВЬ СВОЙ /exec URL
+
+/* ---------- ГДЕ МЕНЯТЬ (3/3): Токен аналитики ---------- */
+const ANALYTICS_TOKEN = '97582f45-c649-45fa-b6df-2bf5df3ed1f45e23dcae-2080-4d3e-8a03-8c53b1c67963'; // <-- ВСТАВЬ СВОЙ ТОКЕН
+
+/* ============ НАСТРОЙКИ ============ */
+const FREE_ATTEMPTS = 2;          // бесплатных попыток в день
+const BONUS_ATTEMPTS_MAX = 1;     // макс бонусных попыток за рекламу в день
+const FETCH_TIMEOUT_MS = 15000;
+const FETCH_RETRIES = 3;
+const RETRY_BASE_DELAY = 2000;
+const OFFERS_CACHE_KEY = 'mb_offers_cache';
+const OFFERS_CACHE_TTL = 60 * 60 * 1000;
+
+/* ============ GLOBAL GUARD ============ */
+if (window.__MB_STATE__) {
+  throw new Error('MB already initialized');
+}
+window.__MB_STATE__ = {
+  busy: false,
+  offers: [],
+  filtered: [],
+  lastOfferId: null,
+  selectedCategory: 'Все',
+  currentOffer: null,
+  timerInterval: null,
+  debugMode: false,
+  noAds: false,
+  lastError: '',
+  feedLoading: false,
+  feedLoaded: false
+};
+const S = window.__MB_STATE__;
+
+/* ============ PARAMS ============ */
+const params = new URLSearchParams(location.search);
+S.debugMode = params.get('debug') === '1';
+S.noAds = params.get('noads') === '1';
+
+/* ============ TELEGRAM WEBAPP ============ */
+let tg = null;
+let tgUserId = '';
+try {
+  tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+  if (tg) {
+    tg.ready();
+    tg.expand();
+    if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+      tgUserId = String(tg.initDataUnsafe.user.id);
+    }
+    if (tg.themeParams) {
+      const tp = tg.themeParams;
+      if (tp.bg_color) document.documentElement.style.setProperty('--bg', tp.bg_color);
+      if (tp.secondary_bg_color) document.documentElement.style.setProperty('--card', tp.secondary_bg_color);
+    }
+  }
+} catch(e) { /* вне Telegram */ }
+
+/* ============ ANON ID ============ */
+function getAnonId() {
+  let id = localStorage.getItem('mb_anon_id');
+  if (!id) { id = 'a_' + Math.random().toString(36).slice(2,12) + Date.now().toString(36); localStorage.setItem('mb_anon_id', id); }
+  return id;
+}
+const ANON_ID = getAnonId();
+
+/* ============ DOM ============ */
+const $ = (sel) => document.querySelector(sel);
+const screenMain = $('#screenMain');
+const screenResult = $('#screenResult');
+const screenLimit = $('#screenLimit');
+const chipsWrap = $('#chipsWrap');
+const boxEmoji = $('#boxEmoji');
+const hintText = $('#hintText');
+const attemptsInfo = $('#attemptsInfo');
+const feedStatus = $('#feedStatus');
+const errorHint = $('#errorHint');
+const resultImgWrap = $('#resultImgWrap');
+const resultTitle = $('#resultTitle');
+const resultPrices = $('#resultPrices');
+const resultMeta = $('#resultMeta');
+const resultErid = $('#resultErid');
+const resultTimer = $('#resultTimer');
+const btnBuy = $('#btnBuy');
+const btnAgain = $('#btnAgain');
+const btnWatchAd = $('#btnWatchAd');
+const btnBackMain = $('#btnBackMain');
+const bonusUsedHint = $('#bonusUsedHint');
+const loader = $('#loader');
+const loaderText = $('#loaderText');
+const debugBar = $('#debugBar');
+
+/* ============ DEBUG ============ */
+function dbg(msg) {
+  if (!S.debugMode) return;
+  debugBar.classList.add('active');
+  debugBar.innerHTML = `<button id="dbgReset">Сбросить попытки</button>
+    <button id="dbgReload">Reload feed</button>
+    <button id="dbgClearCache">Clear cache</button><br>
+    Free: ${getFreeAttempts()} | Bonus: ${getBonusAttempts()} | Total: ${getTotalAttempts()} |
+    FeedLoaded: ${S.feedLoaded} | Offers: ${S.offers.length} | LastErr: ${S.lastError}<br>${msg}<br><hr>` + debugBar.innerHTML;
+  const r = document.getElementById('dbgReset');
+  if (r) r.onclick = () => { resetAttempts(); updateAttemptsUI(); };
+  const rl = document.getElementById('dbgReload');
+  if (rl) rl.onclick = () => loadOffers();
+  const cc = document.getElementById('dbgClearCache');
+  if (cc) cc.onclick = () => { localStorage.removeItem(OFFERS_CACHE_KEY); dbg('Cache cleared'); };
+}
+
+/* ============ ATTEMPTS (localStorage) ============ */
+/* 
+   Модель попыток:
+   - 2 бесплатных попытки (free) — без рекламы
+   - 1 бонусная попытка (bonus) — за просмотр rewarded ad
+   - Всего до 3 попыток в день
+*/
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+function userPrefix() {
+  return tgUserId ? 'mb_' + tgUserId : 'mb_anon';
+}
+function freeAttemptsKey() {
+  return userPrefix() + '_free_' + todayKey();
+}
+function bonusAttemptsKey() {
+  return userPrefix() + '_bonus_' + todayKey();
+}
+function getFreeAttempts() {
+  return parseInt(localStorage.getItem(freeAttemptsKey()) || '0', 10);
+}
+function getBonusAttempts() {
+  return parseInt(localStorage.getItem(bonusAttemptsKey()) || '0', 10);
+}
+function getTotalAttempts() {
+  return getFreeAttempts() + getBonusAttempts();
+}
+function addFreeAttempt() {
+  localStorage.setItem(freeAttemptsKey(), String(getFreeAttempts() + 1));
+}
+function addBonusAttempt() {
+  localStorage.setItem(bonusAttemptsKey(), String(getBonusAttempts() + 1));
+}
+function resetAttempts() {
+  localStorage.setItem(freeAttemptsKey(), '0');
+  localStorage.setItem(bonusAttemptsKey(), '0');
+}
+function hasFreeAttempts() {
+  return getFreeAttempts() < FREE_ATTEMPTS;
+}
+function hasBonusAttempts() {
+  return getBonusAttempts() < BONUS_ATTEMPTS_MAX;
+}
+function canOpen() {
+  // Можно открыть если есть бесплатные ИЛИ бонусные (уже разблокированные)
+  return hasFreeAttempts();
+}
+
+function updateAttemptsUI() {
+  const freeLeft = Math.max(0, FREE_ATTEMPTS - getFreeAttempts());
+  const bonusUsed = getBonusAttempts();
+  const bonusAvail = BONUS_ATTEMPTS_MAX - bonusUsed;
+
+  let html = '';
+  if (freeLeft > 0) {
+    html = '<span class="free-label">🎯 Бесплатных попыток: ' + freeLeft + ' из ' + FREE_ATTEMPTS + '</span>';
+  } else if (bonusAvail > 0) {
+    html = '<span class="bonus-label">🎬 Доступна бонусная попытка за рекламу</span>';
+  } else {
+    html = '🔒 Попытки закончились — приходи завтра!';
+  }
+  attemptsInfo.innerHTML = html;
+
+  // Подсказка под коробкой
+  if (freeLeft > 0) {
+    hintText.textContent = 'Нажми на коробку — узнай свою скидку!';
+  } else if (bonusAvail > 0) {
+    hintText.textContent = 'Бесплатные попытки закончились — получи бонусную!';
+  }
+}
+
+/* ============ ANALYTICS ============ */
+function track(event, extra) {
+  const payload = {
+    ts: new Date().toISOString(),
+    event: event,
+    anon_id: ANON_ID,
+    tg_user_id: tgUserId,
+    offer_id: (extra && extra.offer_id) || '',
+    merchant: (extra && extra.merchant) || '',
+    category: (extra && extra.category) || S.selectedCategory,
+    details_json: (extra && extra.details) || ''
+  };
+  const url = OFFERS_FEED_URL + '?token=' + encodeURIComponent(ANALYTICS_TOKEN);
+  const body = JSON.stringify(payload);
+  try {
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url, body);
+    } else {
+      fetch(url, { method:'POST', mode:'no-cors', body: body, headers:{'Content-Type':'text/plain'} });
+    }
+  } catch(e) { /* silent */ }
+}
+
+/* ============ FETCH WITH TIMEOUT ============ */
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timer);
+    return resp;
+  } catch(e) {
+    clearTimeout(timer);
+    if (e.name === 'AbortError') {
+      throw new Error('Таймаут: сервер не ответил за ' + Math.round(timeoutMs/1000) + ' сек');
+    }
+    throw e;
+  }
+}
+
+/* ============ OFFERS CACHE (localStorage) ============ */
+function getCachedOffers() {
+  try {
+    const raw = localStorage.getItem(OFFERS_CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (!cached || !Array.isArray(cached.data) || cached.data.length === 0) return null;
+    return cached;
+  } catch(e) { return null; }
+}
+
+function setCachedOffers(data) {
+  try {
+    localStorage.setItem(OFFERS_CACHE_KEY, JSON.stringify({ data: data, ts: Date.now() }));
+  } catch(e) { /* quota exceeded — ignore */ }
+}
+
+function isCacheFresh(cached) {
+  if (!cached || !cached.ts) return false;
+  return (Date.now() - cached.ts) < OFFERS_CACHE_TTL;
+}
+
+/* ============ FEED STATUS UI ============ */
+function showFeedLoading() {
+  feedStatus.className = 'feed-status';
+  feedStatus.innerHTML = '<div class="spinner" style="width:24px;height:24px;border-width:3px;margin:0 auto 6px"></div>Загрузка товаров…';
+}
+
+function showFeedError(msg, canRetry) {
+  feedStatus.className = 'feed-status error';
+  let html = '⚠️ ' + msg;
+  if (canRetry) {
+    html += '<br><button class="retry-btn" id="retryFeedBtn">🔄 Повторить загрузку</button>';
+  }
+  feedStatus.innerHTML = html;
+  const btn = document.getElementById('retryFeedBtn');
+  if (btn) btn.addEventListener('click', () => loadOffers());
+}
+
+function showFeedOk() {
+  feedStatus.className = 'feed-status';
+  feedStatus.textContent = '';
+}
+
+function showFeedCached(count, age) {
+  feedStatus.className = 'feed-status';
+  const mins = Math.round(age / 60000);
+  feedStatus.textContent = '📦 ' + count + ' товаров (кэш ' + mins + ' мин назад)';
+}
+
+/* ============ LOAD OFFERS (с retry и кэшем) ============ */
+async function loadOffers() {
+  if (S.feedLoading) return;
+  S.feedLoading = true;
+
+  const cached = getCachedOffers();
+  if (cached && S.offers.length === 0) {
+    S.offers = cached.data;
+    S.filtered = S.selectedCategory === 'Все' ? cached.data : cached.data.filter(o => o.category === S.selectedCategory);
+    buildChips();
+    if (!isCacheFresh(cached)) {
+      showFeedCached(cached.data.length, Date.now() - cached.ts);
+    }
+    dbg('Кэш: ' + cached.data.length + ' офферов');
+  } else if (S.offers.length === 0) {
+    showFeedLoading();
+  }
+
+  let lastErr = '';
+  for (let attempt = 1; attempt <= FETCH_RETRIES; attempt++) {
+    try {
+      dbg('Фид попытка ' + attempt + '/' + FETCH_RETRIES);
+      const resp = await fetchWithTimeout(OFFERS_FEED_URL, { cache:'no-store' }, FETCH_TIMEOUT_MS);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+      const text = await resp.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch(pe) {
+        if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+          throw new Error('Сервер вернул HTML вместо JSON');
+        }
+        throw new Error('Невалидный JSON: ' + text.substring(0, 100));
+      }
+
+      if (!Array.isArray(data) || data.length === 0) throw new Error('Пустой массив офферов');
+
+      S.offers = data;
+      S.filtered = S.selectedCategory === 'Все' ? data : data.filter(o => o.category === S.selectedCategory);
+      S.feedLoaded = true;
+      buildChips();
+      setCachedOffers(data);
+      showFeedOk();
+      track('products_loaded', { details: JSON.stringify({ count: data.length, attempt: attempt }) });
+      dbg('Фид ОК: ' + data.length + ' офферов');
+      S.feedLoading = false;
+      return;
+
+    } catch(e) {
+      lastErr = e.message;
+      dbg('Попытка ' + attempt + ' ошибка: ' + lastErr);
+      if (attempt < FETCH_RETRIES) {
+        const delay = RETRY_BASE_DELAY * Math.pow(2, attempt - 1);
+        if (S.offers.length === 0) {
+          feedStatus.className = 'feed-status';
+          feedStatus.textContent = '⏳ Повтор через ' + Math.round(delay/1000) + ' сек…';
+        }
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
+
+  S.lastError = 'feed: ' + lastErr;
+  track('feed_error', { details: lastErr });
+  S.feedLoading = false;
+
+  if (S.offers.length > 0) {
+    showFeedCached(S.offers.length, cached ? Date.now() - cached.ts : 0);
+  } else {
+    showFeedError('Не удалось загрузить товары. ' + lastErr, true);
+  }
+}
+
+/* ============ CHIPS ============ */
+function buildChips() {
+  const cats = ['Все'];
+  const seen = new Set();
+  S.offers.forEach(o => {
+    if (o.category && !seen.has(o.category)) { seen.add(o.category); cats.push(o.category); }
+  });
+  chipsWrap.innerHTML = '';
+  cats.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'chip' + (c === S.selectedCategory ? ' active' : '');
+    btn.textContent = c;
+    btn.addEventListener('click', () => selectCategory(c));
+    chipsWrap.appendChild(btn);
+  });
+}
+
+function selectCategory(cat) {
+  S.selectedCategory = cat;
+  S.filtered = cat === 'Все' ? S.offers : S.offers.filter(o => o.category === cat);
+  chipsWrap.querySelectorAll('.chip').forEach(ch => {
+    ch.classList.toggle('active', ch.textContent === cat);
+  });
+  track('category_select', { category: cat });
+}
+
+/* ============ WEIGHTED RANDOM ============ */
+function pickOffer() {
+  const pool = S.filtered.length ? S.filtered : S.offers;
+  if (!pool.length) return null;
+
+  let candidates = pool.length > 1 ? pool.filter(o => o.id !== S.lastOfferId) : pool;
+  const totalWeight = candidates.reduce((s, o) => s + (parseFloat(o.weight) || 1), 0);
+  let r = Math.random() * totalWeight;
+  for (const o of candidates) {
+    r -= (parseFloat(o.weight) || 1);
+    if (r <= 0) { S.lastOfferId = o.id; return o; }
+  }
+  const last = candidates[candidates.length - 1];
+  S.lastOfferId = last.id;
+  return last;
+}
+
+/* ============ ADSGRAM ============ */
+let adsgramController = null;
+function initAdsgram() {
+  try {
+    if (window.Adsgram && ADSGRAM_BLOCK_ID && ADSGRAM_BLOCK_ID !== 'YOUR_ADSGRAM_BLOCK_ID') {
+      adsgramController = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
+      dbg('AdsGram OK, blockId=' + ADSGRAM_BLOCK_ID);
+    } else {
+      dbg('AdsGram не инициализирован (нет SDK или placeholder blockId)');
+    }
+  } catch(e) {
+    S.lastError = 'adsgram_init: ' + e.message;
+    dbg('AdsGram init error: ' + e.message);
+  }
+}
+
+/* Показать rewarded рекламу. Возвращает true если пользователь досмотрел */
+async function showRewardedAd() {
+  if (S.noAds) { dbg('Ads skipped (noads=1)'); return true; }
+  if (!adsgramController) {
+    dbg('No AdsGram controller — reward granted anyway for testing');
+    // Если AdsGram не настроен — даём попытку (для тестов и первого запуска)
+    return true;
+  }
+  try {
+    await adsgramController.show();
+    track('ad_ok');
+    dbg('Ad watched successfully');
+    return true;
+  } catch(e) {
+    // Пользователь закрыл рекламу, не досмотрев, или ошибка
+    S.lastError = 'ad: ' + (e && e.message ? e.message : String(e));
+    track('ad_fail', { details: S.lastError });
+    dbg('Ad fail/skip: ' + S.lastError);
+    return false;
+  }
+}
+
+/* ============ BOX CLICK (бесплатные попытки — БЕЗ рекламы) ============ */
+async function onBoxClick() {
+  if (S.busy) return;
+
+  // Бесплатные попытки закончились?
+  if (!hasFreeAttempts()) {
+    // Показываем экран лимита с предложением посмотреть рекламу
+    track('limit_reached');
+    showLimitScreen();
+    return;
+  }
+
+  if (!S.offers.length) {
+    if (S.feedLoading) {
+      errorHint.textContent = 'Загрузка товаров… Подожди пару секунд.';
+    } else {
+      errorHint.textContent = 'Товары не загружены. Нажми «Повторить загрузку».';
+      loadOffers();
+    }
+    errorHint.style.display = 'block';
+    return;
+  }
+  errorHint.style.display = 'none';
+
+  S.busy = true;
+  boxEmoji.classList.add('disabled');
+  track('box_click', { details: JSON.stringify({ type: 'free', attempt: getFreeAttempts() + 1 }) });
+
+  // Анимация
+  boxEmoji.classList.remove('shake');
+  void boxEmoji.offsetWidth;
+  boxEmoji.classList.add('shake');
+
+  // Небольшая пауза для анимации
+  await new Promise(r => setTimeout(r, 700));
+
+  // Списываем бесплатную попытку
+  addFreeAttempt();
+  updateAttemptsUI();
+
+  // Выбираем оффер (БЕЗ рекламы!)
+  const offer = pickOffer();
+  if (!offer) {
+    S.busy = false;
+    boxEmoji.classList.remove('disabled');
+    dbg('Не удалось выбрать оффер');
+    return;
+  }
+
+  S.currentOffer = offer;
+  track('product_show', { offer_id: offer.id, merchant: offer.merchant, category: offer.category });
+  showResult(offer);
+
+  S.busy = false;
+  boxEmoji.classList.remove('disabled');
+}
+
+/* ============ WATCH AD → BONUS ATTEMPT ============ */
+async function onWatchAdClick() {
+  if (S.busy) return;
+  if (!hasBonusAttempts()) return;
+
+  S.busy = true;
+  btnWatchAd.classList.add('disabled');
+  track('ad_bonus_click');
+
+  // Показываем rewarded рекламу
+  const watched = await showRewardedAd();
+
+  if (!watched) {
+    // Не досмотрел — не даём бонус
+    S.busy = false;
+    btnWatchAd.classList.remove('disabled');
+    track('ad_bonus_cancelled');
+    dbg('Пользователь не досмотрел рекламу — бонус не начислен');
+    return;
+  }
+
+  // Досмотрел! Даём бонусную попытку
+  track('ad_bonus_granted');
+  dbg('Бонусная попытка начислена!');
+
+  // Проверяем есть ли офферы
+  if (!S.offers.length) {
+    S.busy = false;
+    btnWatchAd.classList.remove('disabled');
+    errorHint.textContent = 'Товары не загружены.';
+    errorHint.style.display = 'block';
+    return;
+  }
+
+  // Списываем бонусную попытку
+  addBonusAttempt();
+
+  // Выбираем оффер
+  const offer = pickOffer();
+  if (!offer) {
+    S.busy = false;
+    btnWatchAd.classList.remove('disabled');
+    return;
+  }
+
+  S.currentOffer = offer;
+  track('product_show', { offer_id: offer.id, merchant: offer.merchant, category: offer.category,
+    details: JSON.stringify({ type: 'bonus' }) });
+
+  // Переключаемся на результат
+  showResult(offer);
+
+  S.busy = false;
+  btnWatchAd.classList.remove('disabled');
+}
+
+/* ============ SHOW RESULT ============ */
+function showResult(offer) {
+  resultImgWrap.innerHTML = '';
+  if (offer.image) {
+    const img = document.createElement('img');
+    img.src = offer.image;
+    img.alt = offer.title || '';
+    img.onerror = function() { this.replaceWith(noImgEl()); };
+    resultImgWrap.appendChild(img);
+  } else {
+    resultImgWrap.appendChild(noImgEl());
+  }
+
+  resultTitle.textContent = offer.title || 'Товар';
+
+  resultPrices.innerHTML = '';
+  if (offer.price) {
+    const pn = document.createElement('span');
+    pn.className = 'price-new';
+    pn.textContent = formatPrice(offer.price);
+    resultPrices.appendChild(pn);
+  }
+  if (offer.oldPrice) {
+    const po = document.createElement('span');
+    po.className = 'price-old';
+    po.textContent = formatPrice(offer.oldPrice);
+    resultPrices.appendChild(po);
+  }
+
+  resultMeta.innerHTML = '';
+  if (offer.merchant) {
+    const m = document.createElement('span');
+    m.textContent = '🏪 ' + offer.merchant;
+    resultMeta.appendChild(m);
+  }
+  if (offer.category) {
+    const c = document.createElement('span');
+    c.textContent = '📂 ' + offer.category;
+    resultMeta.appendChild(c);
+  }
+
+  if (offer.erid) {
+    resultErid.textContent = 'ERID: ' + offer.erid;
+    resultErid.style.display = 'block';
+  } else {
+    resultErid.style.display = 'none';
+  }
+
+  startTimer(30 * 60);
+
+  screenMain.classList.remove('active');
+  screenLimit.classList.remove('active');
+  screenResult.classList.add('active');
+}
+
+function noImgEl() {
+  const d = document.createElement('div');
+  d.className = 'no-img';
+  d.textContent = 'Нет изображения';
+  return d;
+}
+
+function formatPrice(v) {
+  const n = parseFloat(String(v).replace(/[^\d.,]/g, '').replace(',', '.'));
+  if (isNaN(n)) return String(v);
+  return n.toLocaleString('ru-RU', { style:'currency', currency:'RUB', minimumFractionDigits:0, maximumFractionDigits:0 });
+}
+
+/* ============ TIMER ============ */
+function startTimer(sec) {
+  clearInterval(S.timerInterval);
+  let left = sec;
+  const tick = () => {
+    const m = Math.floor(left / 60);
+    const s = left % 60;
+    resultTimer.textContent = '⏳ Сделка действует: ' + m + ':' + String(s).padStart(2, '0');
+    if (left <= 0) { clearInterval(S.timerInterval); resultTimer.textContent = '⏳ Время истекло'; }
+    left--;
+  };
+  tick();
+  S.timerInterval = setInterval(tick, 1000);
+}
+
+/* ============ BUY CLICK ============ */
+function onBuyClick() {
+  const offer = S.currentOffer;
+  if (!offer) return;
+
+  let url = offer.url || '';
+  if (!url) { dbg('Нет URL у оффера'); return; }
+
+  const isYandex = /market\.yandex/i.test(url);
+  if (!isYandex) {
+    const sep = url.includes('?') ? '&' : '?';
+    if (!/utm_source/i.test(url)) {
+      url = url + sep + 'utm_source=signal_sale&utm_medium=mysterybox';
+    }
+  }
+
+  track('buy_click_web', { offer_id: offer.id, merchant: offer.merchant, category: offer.category });
+
+  try {
+    if (tg && tg.openLink) {
+      tg.openLink(url, { try_instant_view: false });
+    } else {
+      window.open(url, '_blank') || (location.href = url);
+    }
+  } catch(e) {
+    window.open(url, '_blank') || (location.href = url);
+  }
+}
+
+/* ============ TRY AGAIN ============ */
+function onTryAgain() {
+  clearInterval(S.timerInterval);
+  S.currentOffer = null;
+  screenResult.classList.remove('active');
+  screenLimit.classList.remove('active');
+  screenMain.classList.add('active');
+  updateAttemptsUI();
+  track('try_again');
+
+  // Если бесплатных нет — сразу показываем лимит
+  if (!hasFreeAttempts() && !hasBonusAttempts()) {
+    setTimeout(() => showLimitScreen(), 100);
+  } else if (!hasFreeAttempts() && hasBonusAttempts()) {
+    // Бесплатных нет, но есть бонус — показываем экран лимита с кнопкой рекламы
+    setTimeout(() => showLimitScreen(), 100);
+  }
+}
+
+/* ============ LIMIT SCREEN ============ */
+function showLimitScreen() {
+  screenMain.classList.remove('active');
+  screenResult.classList.remove('active');
+  screenLimit.classList.add('active');
+
+  // Настраиваем кнопку рекламы
+  if (hasBonusAttempts()) {
+    btnWatchAd.classList.remove('disabled');
+    btnWatchAd.style.display = '';
+    bonusUsedHint.style.display = 'none';
+  } else {
+    btnWatchAd.style.display = 'none';
+    bonusUsedHint.style.display = 'block';
+  }
+
+  track('limit_screen_shown', { details: JSON.stringify({
+    free_used: getFreeAttempts(),
+    bonus_used: getBonusAttempts(),
+    bonus_available: hasBonusAttempts()
+  })});
+}
+
+/* ============ BACK TO MAIN ============ */
+function onBackMain() {
+  screenLimit.classList.remove('active');
+  screenMain.classList.add('active');
+  updateAttemptsUI();
+}
+
+/* ============ INIT ============ */
+function init() {
+  initAdsgram();
+  updateAttemptsUI();
+
+  // Если все попытки исчерпаны — сразу лимит
+  if (!hasFreeAttempts() && !hasBonusAttempts()) {
+    screenMain.classList.remove('active');
+    screenLimit.classList.add('active');
+    // Настроить кнопку рекламы на экране лимита
+    btnWatchAd.style.display = 'none';
+    bonusUsedHint.style.display = 'block';
+    track('limit_blocked');
+  }
+
+  boxEmoji.addEventListener('click', onBoxClick);
+  btnBuy.addEventListener('click', onBuyClick);
+  btnAgain.addEventListener('click', onTryAgain);
+  btnWatchAd.addEventListener('click', onWatchAdClick);
+  btnBackMain.addEventListener('click', onBackMain);
+
+  track('app_open');
+  loadOffers();
+
+  dbg('Init OK. tgUserId=' + tgUserId + ' anonId=' + ANON_ID);
+}
+
+init();
+</script>
+</body>
+</html>
